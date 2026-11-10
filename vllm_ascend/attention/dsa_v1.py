@@ -1735,7 +1735,13 @@ class AscendDSAImpl(AttentionImplBase[Any]):
         pass
 
     def _wo_a_bmm(self, o_proj_input: torch.Tensor) -> torch.Tensor:
-        """Project grouped activations with FP8 or BF16, preserving the 3D layout."""
+        """Project grouped activations with HiF8, FP8 or BF16, preserving the 3D layout."""
+        if getattr(self.wo_a, "is_hif8", False):
+            from vllm_ascend.quantization.methods.w8a8.w8a8_hif8 import apply_hif8_wo_a
+
+            # The HiF8 codes this returns feed wo_b without a re-cast; the perms match the
+            # MXFP8 branch below, which is the layout wo_a's weight was loaded into.
+            return apply_hif8_wo_a(self.wo_a, o_proj_input, (1, 0, 2), (0, 1, 2), (1, 0, 2))
         if self.support_fp8_attention and _has_weight_scale(self.wo_a):
             o_proj_input, act_scale = torch_npu.npu_dynamic_mx_quant(o_proj_input, dst_type=torch.float8_e4m3fn)
             return torch_npu.npu_transpose_quant_batchmatmul(

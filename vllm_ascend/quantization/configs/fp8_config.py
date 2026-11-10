@@ -129,8 +129,14 @@ class AscendDeepseekV4FP8Config(DeepseekV4FP8Config):
         )
 
         if isinstance(layer, LinearBase):
-            scheme_class = get_scheme_class(FP8_METHOD, "ds_linear")
-            assert scheme_class is not None, f"No scheme registered for {FP8_METHOD}/ds_linear"
+            from ..methods.w8a8.w8a8_hif8 import hif8_linear_enabled, keep_linear_on_mxfp8
+
+            # HiF8 replaces the block-FP8 attention / indexer / engram Linears; the shared experts
+            # stay MXFP8 next to the MXFP4 routed experts.
+            use_hif8 = hif8_linear_enabled() and "shared_experts" not in prefix and not keep_linear_on_mxfp8(prefix)
+            scheme_name = "ds_linear_hif8" if use_hif8 else "ds_linear"
+            scheme_class = get_scheme_class(FP8_METHOD, scheme_name)
+            assert scheme_class is not None, f"No scheme registered for {FP8_METHOD}/{scheme_name}"
             quant_method = AscendLinearMethod(scheme_class(self.weight_block_size))
             return quant_method
         if is_fused_moe_layer(layer):

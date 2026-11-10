@@ -60,7 +60,14 @@ class CVLinearWrapper:
 
         Returns the inner scheme instance (needed for scale_alg/group_size)
         or None. isinstance also covers the DS block-quant subclass.
+
+        A scheme that subclasses the MXFP8 method but stores a different weight / scale
+        layout (ds_linear_hif8) sets is_hif8_scheme and is excluded here, so matmul() falls
+        through to its own quant_method.apply() instead of the MXFP8 Cube path.
         """
+        inner = getattr(quant_method, "quant_method", quant_method)
+        if getattr(inner, "is_hif8_scheme", False):
+            return None
         if isinstance(quant_method, AscendW8A8MXFP8DynamicLinearMethod):
             return quant_method
         if hasattr(quant_method, "quant_method") and isinstance(
